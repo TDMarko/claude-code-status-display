@@ -168,6 +168,47 @@ Everything except the display is board-agnostic, so porting is just editing **`s
 
 The layout re-flows to the new resolution automatically. To support a **driver or bus not listed** (e.g. ST7735, SSD1306, software SPI), add one `#elif` branch to the bus/driver `#if` blocks in `src/main.ino` — that's the only code that touches the panel type.
 
+### Example: generic ESP32 + SPI ILI9341 (240×320)
+
+A common 2.4"/2.8" ILI9341 breakout on a classic ESP32 dev board. Set these in `src/display_config.h` (the SPI pins go in the existing `#ifdef BUS_SPI` block):
+
+```c
+// #define BUS_PARALLEL8
+#define BUS_SPI                 // <- select SPI
+
+// #define DRIVER_ST7789
+#define DRIVER_ILI9341          // <- select ILI9341
+
+// ILI9341 is fixed 240x320; rotation 1 = 320x240 landscape
+#define TFT_WIDTH      240
+#define TFT_HEIGHT     320
+#define TFT_ROTATION   1
+#define TFT_IPS        false
+#define TFT_COL_OFFSET 0
+#define TFT_ROW_OFFSET 0
+
+#define PIN_RST 4
+#define PIN_BL  32              // backlight GPIO (or wire LED to 3V3 and use -1)
+#define PIN_PWR -1              // no separate panel-power pin
+
+// inside the #ifdef BUS_SPI block — classic ESP32 VSPI pins:
+#define PIN_DC   2
+#define PIN_CS   15
+#define PIN_SCK  18
+#define PIN_MOSI 23
+#define PIN_MISO 19
+```
+
+Then point `platformio.ini` at a plain ESP32 and drop the ESP32-S3-only USB flags:
+
+```ini
+board = esp32dev
+build_flags =
+    -DDISABLE_ALL_LIBRARY_WARNINGS
+```
+
+Wiring: panel `VCC`→3V3, `GND`→GND, `LED`→`PIN_BL` (or 3V3), and `SDI/MOSI`, `SCK`, `CS`, `DC`, `RESET`, `SDO/MISO` to the pins above. (Exact GPIOs are up to your wiring — these are just common defaults.)
+
 ## Troubleshooting
 
 - **Upload: `Invalid head of packet`** — bootloader mode (hold BOOT, tap RST, release BOOT); close any serial monitor first.
