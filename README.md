@@ -122,6 +122,7 @@ Add these five events to `~/.claude/settings.json`. If you already have a `hooks
   "hooks": {
     "SessionStart":     [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
     "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
+    "PostToolUse":      [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
     "Notification":     [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
     "Stop":             [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
     "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }]
@@ -146,10 +147,13 @@ curl -s http://claude-display.local/event -H 'Content-Type: application/json' \
 |---|---|---|
 | `SessionStart` | ready | gray |
 | `UserPromptSubmit` | working | amber |
+| `PostToolUse` (a tool ran) | working | amber |
 | `Stop` | done | green |
 | `Notification` (permission or attention) | needs you | red, blinking, top |
 | `Notification` (60s idle nudge) | ignored | none |
 | `SessionEnd` | row removed | none |
+
+`PostToolUse` is what keeps a busy session marked "working". It also clears a "needs you" once you approve a permission prompt and Claude runs the next tool. Long-running or agent sessions can go a long time without a `Stop`, so without this they would get stuck on their last state. Tool activity from subagents carries the parent session id, so it updates the right row.
 
 ## Configuration
 

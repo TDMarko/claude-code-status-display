@@ -282,6 +282,7 @@ void handleEvent() {
     i = allocSlot();
     if (i < 0) { server.send(507, "text/plain", "table full"); return; }
     sessions[i].active = true;
+    sessions[i].state = ST_READY;   // deterministic starting state for a fresh/reused slot
     strncpy(sessions[i].sessionId, sid, sizeof(sessions[i].sessionId) - 1);
     sessions[i].sessionId[sizeof(sessions[i].sessionId) - 1] = '\0';
   }
@@ -292,16 +293,24 @@ void handleEvent() {
   sessions[i].model[sizeof(sessions[i].model) - 1] = '\0';
   sessions[i].ctxPct = doc["ctx"] | 0;
 
-  uint8_t st = sessions[i].state;
+  uint8_t old = sessions[i].state;
+  uint8_t st  = old;
+  // Tool activity (incl. subagents, which carry the parent session id) means the
+  // session is working again. This clears a stale "needs you" after you approve a
+  // permission prompt, and keeps long-running sessions from getting stuck.
   if      (strcmp(event, "SessionStart")     == 0) st = ST_READY;
   else if (strcmp(event, "UserPromptSubmit") == 0) st = ST_WORKING;
+  else if (strcmp(event, "PreToolUse")       == 0) st = ST_WORKING;
+  else if (strcmp(event, "PostToolUse")      == 0) st = ST_WORKING;
   else if (strcmp(event, "Notification")     == 0) st = ST_NEEDS_YOU;
   else if (strcmp(event, "Stop")             == 0) st = ST_DONE;
   sessions[i].state = st;
   sessions[i].lastChange = millis();
-  flashColor = stateColor(st);          // traffic-light circle in the new state's color
-  flashUntil = millis() + FLASH_MS;
-  displayLabel(i, flashLabel, sizeof(flashLabel));   // remember which session
+  if (st != old) {                      // flash only on a real state change (no strobing on tool spam)
+    flashColor = stateColor(st);
+    flashUntil = millis() + FLASH_MS;
+    displayLabel(i, flashLabel, sizeof(flashLabel));   // remember which session
+  }
   server.send(200, "text/plain", "ok");
 }
 
