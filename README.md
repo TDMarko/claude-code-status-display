@@ -24,6 +24,7 @@ Runs on a **LilyGO T-Display-S3** (ESP32-S3 + 1.9" ST7789, 320×170). Your machi
 - **Marquee names**: long folder names scroll (with a 5s pause) instead of truncating.
 - **Scales**: tracks up to 24 sessions; prioritises needs-you/working; summarises the overflow (`+13 more: 5 work, 6 done, 2 idle`).
 - **Quiet by default**: the 60-second "waiting for your input" idle nudge is filtered out, so a finished session stays green instead of drifting to red.
+- **Configurable display**: driver, bus, pins, and resolution live in one `display_config.h`; the layout auto-adapts. Ships tuned for the T-Display-S3, portable to other ESP32 + ST7789/ILI9341 panels.
 
 ## Hardware
 
@@ -34,7 +35,7 @@ Runs on a **LilyGO T-Display-S3** (ESP32-S3 + 1.9" ST7789, 320×170). Your machi
 | **Power** | After flashing, run it off any USB charger/power bank, or a LiPo on the JST connector. The USB cable is only power + flashing — all data is over WiFi. |
 | **2.4 GHz WiFi** | The ESP32-S3 radio is 2.4 GHz only. Your computer can be on 5 GHz as long as it's the same router/LAN. |
 
-> **Does it work on any ESP32?** Not out of the box. The networking and dashboard logic are board-agnostic, but the display driver is hard-coded for this board's ST7789 parallel panel and pins. See [Porting](#porting-to-other-boards).
+> **Does it work on any ESP32?** Not automatically — the display driver, bus, and pins are compile-time settings, not runtime ones. But they all live in one file (`src/display_config.h`): set your bus/driver/pins/resolution, reflash, and the dashboard layout adapts to the new screen. Ships tuned for the T-Display-S3. See [Porting](#porting-to-other-boards).
 
 ## Software
 
@@ -136,10 +137,19 @@ curl -s http://claude-display.local/event -H 'Content-Type: application/json' \
 
 ## Configuration
 
-Firmware knobs (top of `src/main.ino`):
+Display hardware — **`src/display_config.h`** (the file you edit for a different board):
+
+- **Bus** — `BUS_PARALLEL8` or `BUS_SPI`.
+- **Driver** — `DRIVER_ST7789` or `DRIVER_ILI9341`.
+- **Geometry** — `TFT_WIDTH` / `TFT_HEIGHT` / `TFT_ROTATION` / `TFT_IPS` / offsets.
+- **Pins** — `PIN_RST`, `PIN_BL`, `PIN_PWR` (use `-1` if absent) and the bus pins.
+
+The dashboard layout **auto-adapts** to the configured resolution: row count comes from the height, and the model/status/context columns anchor to the right edge with the name filling the rest. (Very narrow panels, <~250px wide, will be cramped since the font is fixed-size.)
+
+Behaviour knobs (top of `src/main.ino`):
 
 - **Colours** — `C_READY / C_WORKING / C_NEEDS / C_DONE` (RGB565).
-- **Layout** — `ROW_H`, `MAX_ROWS`, `MAX_SESSIONS`.
+- **Rows / capacity** — `ROW_H`, `MAX_SESSIONS`.
 - **Flash** — `FLASH_MS` (traffic-light duration).
 - **Marquee** — `HOLD_L` / `HOLD_R` (end pauses) and the `* 25` / `/ 25` scroll speed in `drawMarqueeLabel`.
 
@@ -150,17 +160,13 @@ Host knobs (`hooks/claude-display.sh`):
 
 ## Porting to other boards
 
-The display is the only board-specific part. In `src/main.ino`, the block between the `Arduino_GFX setting` comments defines the panel:
+Everything except the display is board-agnostic, so porting is just editing **`src/display_config.h`** and reflashing:
 
-```c
-Arduino_DataBus *bus = new Arduino_ESP32PAR8Q(
-    7 /*DC*/, 6 /*CS*/, 8 /*WR*/, 9 /*RD*/,
-    39,40,41,42,45,46,47,48 /*D0..D7*/);
-Arduino_G *output = new Arduino_ST7789(
-    bus, 5 /*RST*/, 3 /*rotation*/, true /*IPS*/, 170, 320, 35,0,35,0);
-```
+1. Pick the **bus** (`BUS_PARALLEL8` / `BUS_SPI`) and **driver** (`DRIVER_ST7789` / `DRIVER_ILI9341`).
+2. Set the **pins** for your wiring and the **geometry** (`TFT_WIDTH`/`TFT_HEIGHT`/`TFT_ROTATION`/offsets).
+3. If your board isn't an ESP32-S3 dev variant, update `board` in `platformio.ini`.
 
-To run on a different ESP32 + display, replace this with the correct Arduino_GFX bus/driver for your panel (e.g. an SPI `Arduino_HWSPI` + `Arduino_ILI9341`), fix the width/height/rotation, and update `board`/`build_flags` in `platformio.ini`. Everything else (WiFi, HTTP endpoint, rendering) is unchanged.
+The layout re-flows to the new resolution automatically. To support a **driver or bus not listed** (e.g. ST7735, SSD1306, software SPI), add one `#elif` branch to the bus/driver `#if` blocks in `src/main.ino` — that's the only code that touches the panel type.
 
 ## Troubleshooting
 

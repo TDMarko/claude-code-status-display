@@ -2,20 +2,41 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include "secrets.h"
+#include "display_config.h"
 #include <WebServer.h>
 #include <ArduinoJson.h>
 
-// ---- Display (from Arduino_GFX_PDQgraphicstest; rotation 3 = landscape 320x170) ----
-#define GFX_EXTRA_PRE_INIT() { pinMode(15, OUTPUT); digitalWrite(15, HIGH); } // PWD
-#define GFX_BL 38                                                             // backlight
+// ---- Display: built from display_config.h ----
+#if defined(BUS_PARALLEL8)
 Arduino_DataBus *bus = new Arduino_ESP32PAR8Q(
-    7 /*DC*/, 6 /*CS*/, 8 /*WR*/, 9 /*RD*/,
-    39, 40, 41, 42, 45, 46, 47, 48 /*D0..D7*/);
+    PIN_DC, PIN_CS, PIN_WR, PIN_RD,
+    PAR_D0, PAR_D1, PAR_D2, PAR_D3, PAR_D4, PAR_D5, PAR_D6, PAR_D7);
+#elif defined(BUS_SPI)
+Arduino_DataBus *bus = new Arduino_ESP32SPI(PIN_DC, PIN_CS, PIN_SCK, PIN_MOSI, PIN_MISO);
+#else
+  #error "display_config.h: pick a bus (BUS_PARALLEL8 or BUS_SPI)"
+#endif
+
+#if defined(DRIVER_ST7789)
 Arduino_G *output = new Arduino_ST7789(
-    bus, 5 /*RST*/, 3 /*rotation*/, true /*IPS*/,
-    170 /*width*/, 320 /*height*/, 35, 0, 35, 0 /*offsets*/);
-// Off-screen framebuffer (320x170) blitted in one pass -> no flicker
-Arduino_Canvas *gfx = new Arduino_Canvas(320 /*w*/, 170 /*h*/, output);
+    bus, PIN_RST, TFT_ROTATION, TFT_IPS,
+    TFT_WIDTH, TFT_HEIGHT, TFT_COL_OFFSET, TFT_ROW_OFFSET, TFT_COL_OFFSET, TFT_ROW_OFFSET);
+#elif defined(DRIVER_ILI9341)
+Arduino_G *output = new Arduino_ILI9341(bus, PIN_RST, TFT_ROTATION, TFT_IPS);
+#else
+  #error "display_config.h: pick a driver (DRIVER_ST7789 or DRIVER_ILI9341)"
+#endif
+
+// Canvas (off-screen framebuffer, blitted in one pass -> no flicker).
+// Its size is the rotated screen size.
+#if (TFT_ROTATION == 1 || TFT_ROTATION == 3)
+  #define SCREEN_W TFT_HEIGHT
+  #define SCREEN_H TFT_WIDTH
+#else
+  #define SCREEN_W TFT_WIDTH
+  #define SCREEN_H TFT_HEIGHT
+#endif
+Arduino_Canvas *gfx = new Arduino_Canvas(SCREEN_W, SCREEN_H, output);
 
 // ---- Colors (RGB565) ----
 #define C_BG      0x0000
@@ -40,10 +61,9 @@ struct Session {
 };
 Session sessions[MAX_SESSIONS];
 
-// ---- Layout ----
+// ---- Layout (row count & column x-positions are derived from screen size at render) ----
 const int HEADER_H = 22;
 const int ROW_H    = 18;
-const int MAX_ROWS = 7;
 
 uint32_t lastRender = 0;
 uint32_t lastBlink  = 0;
@@ -109,8 +129,8 @@ void drawMarqueeLabel(int x, int y, int w, const char* text) {
   }
   gfx->setCursor(x - off, y);
   gfx->print(text);
-  gfx->fillRect(x + w, y, 320 - (x + w), 16, C_BG);        // mask right overflow
-  gfx->fillRect(0, y, x, 16, C_BG);                        // mask left overflow
+  gfx->fillRect(x + w, y, gfx->width() - (x + w), 16, C_BG);  // mask right overflow
+  gfx->fillRect(0, y, x, 16, C_BG);                          // mask left overflow
 }
 
 void render() {
@@ -134,6 +154,18 @@ void render() {
   gfx->fillScreen(C_BG);
   needFastRender = false;   // recomputed below; set true if any label scrolls
 
+  const int W = gfx->width(), H = gfx->height();
+
+  // Right-anchored columns, computed from width (so wider screens get more name room)
+  const int pctW   = 24;                 // room for "99%"
+  const int barW   = 40;
+  const int barX   = W - 2 - pctW - 4 - barW;
+  const int stateX = barX - 6 - 54;      // 54 = "needs you" at size 1
+  const int modelX = stateX - 4 - 36;    // 36 = up to 6-char model tag
+  const int labelX = 18;
+  int labelW = modelX - 4 - labelX;
+  if (labelW < 24) labelW = 24;          // clamp on very narrow screens (may overlap)
+
   // Header: "Claude N" + IP/status on the right
   int count = 0;
   for (int i = 0; i < MAX_SESSIONS; i++) if (sessions[i].active) count++;
@@ -146,9 +178,9 @@ void render() {
   gfx->setTextSize(1);
   gfx->setTextColor(C_HEADER);
   String status = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : String("no wifi");
-  gfx->setCursor(320 - status.length() * 6 - 4, 7);
+  gfx->setCursor(W - status.length() * 6 - 4, 7);
   gfx->print(status);
-  gfx->drawFastHLine(0, HEADER_H, 320, C_HEADER);
+  gfx->drawFastHLine(0, HEADER_H, W, C_HEADER);
 
   // Order by priority: needs-you, then working, then done, then ready/idle
   int order[MAX_SESSIONS]; int m = 0;
@@ -157,47 +189,52 @@ void render() {
     for (int i = 0; i < MAX_SESSIONS; i++)
       if (sessions[i].active && sessions[i].state == prio[pr]) order[m++] = i;
 
-  int shown = m < MAX_ROWS ? m : MAX_ROWS;
+  // How many rows fit; leave the last line for the summary footer if overflowing
+  int rowsFit = (H - HEADER_H - 4) / ROW_H;
+  if (rowsFit < 1) rowsFit = 1;
+  bool overflow = m > rowsFit;
+  int shown = overflow ? rowsFit - 1 : m;
+
   for (int r = 0; r < shown; r++) {
     int i = order[r];
     int y = HEADER_H + 4 + r * ROW_H;
     uint16_t col = stateColor(sessions[i].state);
 
     char lbl[28]; displayLabel(i, lbl, sizeof(lbl));
-    drawMarqueeLabel(18, y, 134, lbl);     // scrolls long names; masks its own band
+    drawMarqueeLabel(labelX, y, labelW, lbl);   // scrolls long names; masks its own band
 
     bool drawDot = !(sessions[i].state == ST_NEEDS_YOU && !blinkOn);   // blink for needs-you
     if (drawDot) gfx->fillCircle(8, y + 6, 4, col);
 
     gfx->setTextSize(1);
     gfx->setTextColor(C_HEADER);           // model tag
-    gfx->setCursor(156, y + 3);
+    gfx->setCursor(modelX, y + 3);
     gfx->print(sessions[i].model);
 
     gfx->setTextColor(col);                // status
-    gfx->setCursor(196, y + 3);
+    gfx->setCursor(stateX, y + 3);
     gfx->print(stateText(sessions[i].state));
 
     // context bar (green < 60, amber 60-84, red >= 85) + percentage
     uint8_t p = sessions[i].ctxPct > 99 ? 99 : sessions[i].ctxPct;   // 99% is the max shown
-    int bx = 256, bw = 40, by = y + 3, bh = 8;
-    gfx->drawRect(bx, by, bw, bh, C_HEADER);
+    int by = y + 3, bh = 8;
+    gfx->drawRect(barX, by, barW, bh, C_HEADER);
     if (p > 0) {
       uint16_t bc = p >= 85 ? C_NEEDS : (p >= 60 ? C_WORKING : C_DONE);
-      gfx->fillRect(bx + 1, by + 1, (bw - 2) * p / 100, bh - 2, bc);
+      gfx->fillRect(barX + 1, by + 1, (barW - 2) * p / 100, bh - 2, bc);
     }
     char pc[6]; snprintf(pc, sizeof(pc), "%d%%", p);
     gfx->setTextColor(C_TEXT);
-    gfx->setCursor(318 - (int)strlen(pc) * 6, y + 3);   // right-aligned to the edge
+    gfx->setCursor(W - (int)strlen(pc) * 6 - 2, y + 3);   // right-aligned to the edge
     gfx->print(pc);
   }
-  if (m > MAX_ROWS) {
-    int y = HEADER_H + 4 + MAX_ROWS * ROW_H;
+  if (overflow) {
+    int y = HEADER_H + 4 + shown * ROW_H;
     // Summarize the hidden (lowest-priority) sessions by state
     int c[4] = { 0, 0, 0, 0 };   // indexed by state enum
-    for (int r = MAX_ROWS; r < m; r++) c[sessions[order[r]].state]++;
+    for (int r = shown; r < m; r++) c[sessions[order[r]].state]++;
     char more[64];
-    int n = snprintf(more, sizeof(more), "+%d more:", m - MAX_ROWS);
+    int n = snprintf(more, sizeof(more), "+%d more:", m - shown);
     if (c[ST_NEEDS_YOU]) n += snprintf(more + n, sizeof(more) - n, " %d need", c[ST_NEEDS_YOU]);
     if (c[ST_WORKING])   n += snprintf(more + n, sizeof(more) - n, " %d work", c[ST_WORKING]);
     if (c[ST_DONE])      n += snprintf(more + n, sizeof(more) - n, " %d done", c[ST_DONE]);
@@ -279,8 +316,12 @@ void connectWiFi() {
 
 void setup() {
   Serial.begin(115200);
-  GFX_EXTRA_PRE_INIT();
-  pinMode(GFX_BL, OUTPUT); digitalWrite(GFX_BL, HIGH);
+#if PIN_PWR >= 0
+  pinMode(PIN_PWR, OUTPUT); digitalWrite(PIN_PWR, HIGH);   // enable panel power
+#endif
+#if PIN_BL >= 0
+  pinMode(PIN_BL, OUTPUT); digitalWrite(PIN_BL, HIGH);     // backlight on
+#endif
   gfx->begin();
   gfx->fillScreen(C_BG);
   gfx->setTextSize(2); gfx->setTextColor(C_TEXT);
