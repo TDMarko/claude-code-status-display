@@ -232,17 +232,6 @@ Wiring: panel `VCC`→3V3, `GND`→GND, `LED`→`PIN_BL` (or 3V3), and `SDI/MOSI
 - **Serial shows `WiFi: FAILED`** — it must be a 2.4 GHz network; double-check the SSID/password (special characters in the password can break the C string); WPA3-only routers may need WPA2/WPA3 mixed mode.
 - **Nothing appears on the board** — check the board is reachable (`curl http://<board>/`), that you started a **new** session after adding the hooks, and that `jq` is installed.
 
-## Related projects
-
-Prior art in the "physical status display for Claude Code" space — worth a look, and thanks for the inspiration:
-
-- [alonw0/claude-monitor-esp32](https://github.com/alonw0/claude-monitor-esp32) — MicroPython OLED notifier with sound and a "waiting" LED.
-- [houxiaomu/m5stack-coding-toys](https://github.com/houxiaomu/m5stack-coding-toys) — mirrors a single live session (model, context, cost, git) onto an M5Stack CoreS3.
-- [rootedlab-code/claude-code-usage-monitor](https://github.com/rootedlab-code/claude-code-usage-monitor) — Waveshare ESP32-S3 usage monitor (cost, tokens, rate-limit window) via a Python bridge.
-- [puritysb/AgentDeck](https://github.com/puritysb/AgentDeck) — multi-surface controller/dashboard for AI coding agents.
-
-**What's different here:** a **multi-session** dashboard (one row per concurrent tab, priority-sorted) driven purely by Claude Code **hooks → HTTP over WiFi** — no bridge daemon and no Bluetooth.
-
 ## Credits
 
 - Board definition and hardware: [LilyGO T-Display-S3](https://github.com/Xinyuan-LilyGO/T-Display-S3).
