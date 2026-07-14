@@ -1,65 +1,65 @@
 # Claude Code Status Display
 
-A small always-on hardware dashboard for [Claude Code](https://claude.com/claude-code) that tracks **all your concurrent sessions at once** — one row per terminal tab. See at a glance what each session is doing right now — **working**, **done**, or **needs you** — plus its context-window usage and model. When a session changes state it flashes a big traffic-light circle so you notice from across the room.
+A small screen for your desk that shows what Claude Code is doing. It tracks all your sessions at the same time, one row per terminal tab. Each row shows the status (working, done, or needs you), how full the context window is, and which model the session uses. When a session changes state, the screen flashes a colored circle so you notice it even when you are looking at something else.
 
-Runs on a **LilyGO T-Display-S3** (ESP32-S3 + 1.9" ST7789, 320×170). Your machine pushes updates to it over WiFi via Claude Code hooks — no cloud, no broker, no daemon.
+It runs on a LilyGO T-Display-S3 (ESP32-S3 with a 1.9 inch ST7789 screen, 320x170). Your computer sends updates to it over WiFi using Claude Code hooks. There is no cloud service and no background program to keep running.
 
-![The dashboard running on a LilyGO T-Display-S3: four Claude Code sessions with per-row model tag, status, and context-usage bars](docs/example.png)
+![The dashboard on a LilyGO T-Display-S3 showing four Claude Code sessions with model, status, and context bars](docs/example.png)
 
 ```
- Terminal tab 1 (Claude Code) ┐
- Terminal tab 2 (Claude Code) ┤  hook → curl POST (JSON)     ┌───────────────────────┐
- Terminal tab 3 (Claude Code) ┘  ─────────────────────────► │  ESP32 T-Display-S3    │
-                                    over your WiFi / LAN      │  • HTTP server :80     │
-                                                              │  • in-RAM session table│
-                                                              │  • renders dashboard   │
-                                                              └───────────────────────┘
+  Claude Code sessions (your terminal tabs)
+        |
+        |  each hook sends a small JSON update over your WiFi
+        v
+  ESP32 T-Display-S3
+    - HTTP server on port 80
+    - keeps a table of sessions in memory
+    - draws the dashboard
 ```
 
 ## Compatibility
 
-The integration is a Claude Code **hook**, so it works with any Claude Code that runs **locally on your machine** and reads `~/.claude/settings.json`:
+The link between Claude Code and the board is a Claude Code hook. So it works with any Claude Code that runs on your own machine and reads `~/.claude/settings.json`.
 
-| Surface | Works? | Why |
+| Surface | Works | Why |
 |---|---|---|
-| Terminal / CLI | ✅ | Runs locally, fires hooks. |
-| VS Code / JetBrains extension | ✅ | Same local engine and `~/.claude/settings.json`. |
-| Desktop app (Mac/Windows) | ✅ *(should)* | Runs locally; not hardware-tested here. |
-| Web app (claude.ai/code) | ❌ | Runs on Anthropic's servers — the hook can't execute on your machine or reach a device on your LAN. |
+| Terminal / CLI | Yes | Runs on your machine and fires hooks. |
+| VS Code / JetBrains extension | Yes | Same local engine and `settings.json`. |
+| Desktop app (Mac/Windows) | Should | Runs locally. Not tested on hardware here. |
+| Web app (claude.ai/code) | No | Runs on Anthropic servers, so the hook cannot run on your machine or reach a device on your network. |
 
-Multiple surfaces at once is fine — every local session that fires hooks shows up, regardless of which app started it.
+Running several of these at once is fine. Every local session that fires hooks shows up, no matter which app started it.
 
 ## Features
 
-- **Multi-session by design** — tracks every concurrent Claude Code session/tab at once (up to 24), one row each, priority-sorted so anything needing you jumps to the top; overflow collapses into a per-state summary (`+13 more: 5 work, 6 done, 2 idle`).
-- **One row per session**, labelled by project folder (with `#1`/`#2` suffixes when two sessions share a folder).
-- **Live status**: ready (gray) · working (amber) · done (green) · needs you (red, blinking, pinned to top).
-- **Context bar + %** per session (green → amber → red as the window fills).
-- **Model tag** per session (`opus`, `fable`, …).
-- **Traffic-light flash**: on any state change, a big colored circle blinks for ~1s with the session's name, so background tabs grab your attention.
-- **Marquee names**: long folder names scroll (with a 5s pause) instead of truncating.
-- **Scales**: tracks up to 24 sessions; prioritises needs-you/working; summarises the overflow (`+13 more: 5 work, 6 done, 2 idle`).
-- **Quiet by default**: the 60-second "waiting for your input" idle nudge is filtered out, so a finished session stays green instead of drifting to red.
-- **Configurable display**: driver, bus, pins, and resolution live in one `display_config.h`; the layout auto-adapts. Ships tuned for the T-Display-S3, portable to other ESP32 + ST7789/ILI9341 panels.
+- Tracks many sessions at once (up to 24), one row each. Sessions that need you are sorted to the top. If there are more sessions than fit, the extra ones are summed up in a footer like `+13 more: 5 work, 6 done, 2 idle`.
+- Each row is labelled by its project folder. If two sessions share a folder, they get `#1` and `#2`.
+- Status colors: gray for ready, amber for working, green for done, red (blinking) for needs you.
+- A context bar and percentage per session. It goes green, then amber, then red as the window fills.
+- The model name per session (opus, fable, and so on).
+- On any state change the screen shows a big blinking circle in that color, with the session name, for about one second.
+- Long folder names scroll left and right so you can read them. They pause for 5 seconds first.
+- The 60 second "waiting for your input" nudge from Claude is ignored, so a finished session stays green instead of turning red on its own.
+- The display is set in one file (`src/display_config.h`): driver, bus, pins, and resolution. The layout adjusts to the screen size. It ships set up for the T-Display-S3 and can be changed for other ESP32 boards with an ST7789 or ILI9341 screen.
 
 ## Hardware
 
-| Requirement | Notes |
+| You need | Notes |
 |---|---|
-| **LilyGO T-Display-S3** | ESP32-S3, 1.9" ST7789 IPS, 320×170. The non-touch version is fine. |
-| **USB-C cable** | For flashing and (optionally) power. |
-| **Power** | After flashing, run it off any USB charger/power bank, or a LiPo on the JST connector. The USB cable is only power + flashing — all data is over WiFi. |
-| **2.4 GHz WiFi** | The ESP32-S3 radio is 2.4 GHz only. Your computer can be on 5 GHz as long as it's the same router/LAN. |
+| LilyGO T-Display-S3 | ESP32-S3, 1.9 inch ST7789 IPS, 320x170. The non-touch version is fine. |
+| USB-C cable | For flashing, and for power if you want. |
+| Power | After flashing you can run it from any USB charger or power bank, or a LiPo battery on the JST connector. The USB cable only carries power and flashing. All data goes over WiFi. |
+| 2.4 GHz WiFi | The ESP32-S3 radio only works on 2.4 GHz. Your computer can be on 5 GHz as long as it is on the same router. |
 
-> **Does it work on any ESP32?** Not automatically — the display driver, bus, and pins are compile-time settings, not runtime ones. But they all live in one file (`src/display_config.h`): set your bus/driver/pins/resolution, reflash, and the dashboard layout adapts to the new screen. Ships tuned for the T-Display-S3. See [Porting](#porting-to-other-boards).
+Does it work on any ESP32? Not by itself. The display driver, bus, and pins are set when you build the firmware, not at runtime. But they all live in one file (`src/display_config.h`). Set your bus, driver, pins, and resolution, flash again, and the layout adjusts to the new screen. See [Porting](#porting-to-other-boards).
 
 ## Software
 
-- [PlatformIO](https://platformio.org/) (VS Code extension or `pio` CLI).
-- `jq` and `curl` on the machine running Claude Code (macOS/Linux). `curl` is preinstalled; install `jq` with `brew install jq` / `apt install jq`.
+- PlatformIO (the VS Code extension or the `pio` command line).
+- `jq` and `curl` on the computer that runs Claude Code (macOS or Linux). `curl` is already installed. Install `jq` with `brew install jq` or `apt install jq`.
 - Claude Code.
 
-Arduino_GFX and ArduinoJson are fetched automatically by PlatformIO — nothing to install by hand.
+PlatformIO downloads Arduino_GFX and ArduinoJson for you. You do not install them by hand.
 
 ## Setup
 
@@ -71,7 +71,7 @@ cd claude-code-status-display
 cp src/secrets.h.example src/secrets.h
 ```
 
-Edit `src/secrets.h` with your **2.4 GHz** WiFi credentials (this file is git-ignored, so it's never committed):
+Put your 2.4 GHz WiFi name and password in `src/secrets.h`. This file is git-ignored, so it is never committed.
 
 ```c
 #define WIFI_SSID "your-network"
@@ -84,7 +84,7 @@ Plug in the board and flash:
 pio run -e claude_display -t upload
 ```
 
-> If upload fails with `Invalid head of packet` / a serial-sync error, put the board in bootloader mode: **hold BOOT, tap RST, release BOOT**, then run upload again. Make sure no serial monitor is holding the port.
+If upload fails with `Invalid head of packet` or a serial sync error, put the board in bootloader mode: hold BOOT, tap RST, release BOOT, then run upload again. Also close any serial monitor that is holding the port.
 
 Open the serial monitor to see the IP it gets:
 
@@ -92,7 +92,7 @@ Open the serial monitor to see the IP it gets:
 pio device monitor -b 115200
 ```
 
-You should see `WiFi: 192.168.x.y`. The board also advertises itself as `claude-display.local` via mDNS. Confirm it's reachable:
+You should see a line like `WiFi: 192.168.x.y`. The board also announces itself as `claude-display.local` over mDNS. Check that it answers:
 
 ```bash
 curl http://claude-display.local/      # or  curl http://192.168.x.y/
@@ -107,7 +107,7 @@ cp hooks/claude-display.sh ~/.claude/hooks/
 chmod +x ~/.claude/hooks/claude-display.sh
 ```
 
-Open `~/.claude/hooks/claude-display.sh` and set `BOARD`. Leave the `claude-display.local` default if mDNS resolved above; otherwise use the IP:
+Open `~/.claude/hooks/claude-display.sh` and set `BOARD`. Keep the `claude-display.local` default if mDNS worked above. Otherwise use the IP:
 
 ```sh
 BOARD="http://192.168.x.y"
@@ -115,7 +115,7 @@ BOARD="http://192.168.x.y"
 
 ### 3. Wire up Claude Code hooks
 
-Add these five events to `~/.claude/settings.json`. **Merge** into any existing `hooks` block — don't overwrite hooks you already have. Use the absolute path (Claude Code does not expand `~`):
+Add these five events to `~/.claude/settings.json`. If you already have a `hooks` block, add to it instead of replacing it. Use the full path, because Claude Code does not expand `~`.
 
 ```json
 {
@@ -129,11 +129,11 @@ Add these five events to `~/.claude/settings.json`. **Merge** into any existing 
 }
 ```
 
-Validate the file: `jq . ~/.claude/settings.json >/dev/null && echo OK`
+Check the file is still valid JSON: `jq . ~/.claude/settings.json >/dev/null && echo OK`
 
 ### 4. Test
 
-Hooks load when a session starts, so open a **new** terminal tab and run `claude`. A row should appear labelled by the folder, tracking working → done as you go. Or fire a fake event by hand:
+Hooks load when a session starts, so open a new terminal tab and run `claude`. A row should appear with the folder name and move from working to done as you go. You can also send a fake event by hand:
 
 ```bash
 curl -s http://claude-display.local/event -H 'Content-Type: application/json' \
@@ -142,58 +142,58 @@ curl -s http://claude-display.local/event -H 'Content-Type: application/json' \
 
 ## Status reference
 
-| Claude Code hook | Row status | Colour |
+| Claude Code hook | Row status | Color |
 |---|---|---|
 | `SessionStart` | ready | gray |
 | `UserPromptSubmit` | working | amber |
 | `Stop` | done | green |
-| `Notification` (permission/attention) | needs you | red, blinking, pinned to top |
-| `Notification` (60s idle nudge) | *ignored* | — |
-| `SessionEnd` | row removed | — |
+| `Notification` (permission or attention) | needs you | red, blinking, top |
+| `Notification` (60s idle nudge) | ignored | none |
+| `SessionEnd` | row removed | none |
 
 ## Configuration
 
-Display hardware — **`src/display_config.h`** (the file you edit for a different board):
+Display hardware is set in `src/display_config.h`. That is the file you edit for a different board:
 
-- **Bus** — `BUS_PARALLEL8` or `BUS_SPI`.
-- **Driver** — `DRIVER_ST7789` or `DRIVER_ILI9341`.
-- **Geometry** — `TFT_WIDTH` / `TFT_HEIGHT` / `TFT_ROTATION` / `TFT_IPS` / offsets.
-- **Pins** — `PIN_RST`, `PIN_BL`, `PIN_PWR` (use `-1` if absent) and the bus pins.
+- Bus: `BUS_PARALLEL8` or `BUS_SPI`.
+- Driver: `DRIVER_ST7789` or `DRIVER_ILI9341`.
+- Geometry: `TFT_WIDTH`, `TFT_HEIGHT`, `TFT_ROTATION`, `TFT_IPS`, and the offsets.
+- Pins: `PIN_RST`, `PIN_BL`, `PIN_PWR` (use `-1` if the board does not have one), and the bus pins.
 
-The dashboard layout **auto-adapts** to the configured resolution: row count comes from the height, and the model/status/context columns anchor to the right edge with the name filling the rest. (Very narrow panels, <~250px wide, will be cramped since the font is fixed-size.)
+The layout adjusts to the resolution. The number of rows comes from the screen height. The model, status, and context columns sit on the right, and the name fills the rest. Very narrow screens (under about 250px wide) will be tight, because the font is a fixed size.
 
-Behaviour knobs (top of `src/main.ino`):
+Behaviour is set at the top of `src/main.ino`:
 
-- **Colours** — `C_READY / C_WORKING / C_NEEDS / C_DONE` (RGB565).
-- **Rows / capacity** — `ROW_H`, `MAX_SESSIONS`.
-- **Flash** — `FLASH_MS` (traffic-light duration).
-- **Marquee** — `HOLD_L` / `HOLD_R` (end pauses) and the `* 25` / `/ 25` scroll speed in `drawMarqueeLabel`.
+- Colors: `C_READY`, `C_WORKING`, `C_NEEDS`, `C_DONE` (RGB565).
+- Rows and capacity: `ROW_H`, `MAX_SESSIONS`.
+- Flash: `FLASH_MS` (how long the circle shows).
+- Marquee: `HOLD_L` and `HOLD_R` (pauses at each end) and the `* 25` / `/ 25` scroll speed in `drawMarqueeLabel`.
 
-Host knobs (`hooks/claude-display.sh`):
+Host settings are in `hooks/claude-display.sh`:
 
-- **`BOARD`** — board address (hostname or IP).
-- **Context window** — inferred as 200k, or 1M once a turn exceeds 200k. Claude Code doesn't expose the real window to hooks; hard-code `win` if you always run one size (e.g. a `[1m]` model).
+- `BOARD`: the board address (hostname or IP).
+- Context window: it is guessed as 200k, or 1M once a turn goes over 200k. Claude Code does not tell the hook the real window size. If you always use one size (for example a `[1m]` model), set `win` directly.
 
 ## Porting to other boards
 
-Everything except the display is board-agnostic, so porting is just editing **`src/display_config.h`** and reflashing:
+Everything except the display works on any ESP32. To port, edit `src/display_config.h` and flash again:
 
-1. Pick the **bus** (`BUS_PARALLEL8` / `BUS_SPI`) and **driver** (`DRIVER_ST7789` / `DRIVER_ILI9341`).
-2. Set the **pins** for your wiring and the **geometry** (`TFT_WIDTH`/`TFT_HEIGHT`/`TFT_ROTATION`/offsets).
-3. If your board isn't an ESP32-S3 dev variant, update `board` in `platformio.ini`.
+1. Pick the bus (`BUS_PARALLEL8` or `BUS_SPI`) and driver (`DRIVER_ST7789` or `DRIVER_ILI9341`).
+2. Set the pins for your wiring and the geometry (`TFT_WIDTH`, `TFT_HEIGHT`, `TFT_ROTATION`, offsets).
+3. If your board is not an ESP32-S3 dev variant, change `board` in `platformio.ini`.
 
-The layout re-flows to the new resolution automatically. To support a **driver or bus not listed** (e.g. ST7735, SSD1306, software SPI), add one `#elif` branch to the bus/driver `#if` blocks in `src/main.ino` — that's the only code that touches the panel type.
+The layout re-flows to the new resolution on its own. To add a driver or bus that is not listed (for example ST7735, SSD1306, or software SPI), add one `#elif` branch to the bus and driver `#if` blocks in `src/main.ino`. That is the only code that touches the panel type.
 
-### Example: generic ESP32 + SPI ILI9341 (240×320)
+### Example: generic ESP32 with SPI ILI9341 (240x320)
 
-A common 2.4"/2.8" ILI9341 breakout on a classic ESP32 dev board. Set these in `src/display_config.h` (the SPI pins go in the existing `#ifdef BUS_SPI` block):
+A common 2.4 or 2.8 inch ILI9341 screen on a classic ESP32 board. Set these in `src/display_config.h` (the SPI pins go in the `#ifdef BUS_SPI` block):
 
 ```c
 // #define BUS_PARALLEL8
-#define BUS_SPI                 // <- select SPI
+#define BUS_SPI                 // select SPI
 
 // #define DRIVER_ST7789
-#define DRIVER_ILI9341          // <- select ILI9341
+#define DRIVER_ILI9341          // select ILI9341
 
 // ILI9341 is fixed 240x320; rotation 1 = 320x240 landscape
 #define TFT_WIDTH      240
@@ -207,7 +207,7 @@ A common 2.4"/2.8" ILI9341 breakout on a classic ESP32 dev board. Set these in `
 #define PIN_BL  32              // backlight GPIO (or wire LED to 3V3 and use -1)
 #define PIN_PWR -1              // no separate panel-power pin
 
-// inside the #ifdef BUS_SPI block — classic ESP32 VSPI pins:
+// inside the #ifdef BUS_SPI block, classic ESP32 VSPI pins:
 #define PIN_DC   2
 #define PIN_CS   15
 #define PIN_SCK  18
@@ -215,7 +215,7 @@ A common 2.4"/2.8" ILI9341 breakout on a classic ESP32 dev board. Set these in `
 #define PIN_MISO 19
 ```
 
-Then point `platformio.ini` at a plain ESP32 and drop the ESP32-S3-only USB flags:
+Then change `platformio.ini` to a plain ESP32 and remove the ESP32-S3 USB flags:
 
 ```ini
 board = esp32dev
@@ -223,21 +223,21 @@ build_flags =
     -DDISABLE_ALL_LIBRARY_WARNINGS
 ```
 
-Wiring: panel `VCC`→3V3, `GND`→GND, `LED`→`PIN_BL` (or 3V3), and `SDI/MOSI`, `SCK`, `CS`, `DC`, `RESET`, `SDO/MISO` to the pins above. (Exact GPIOs are up to your wiring — these are just common defaults.)
+Wiring: panel VCC to 3V3, GND to GND, LED to `PIN_BL` (or 3V3), and SDI/MOSI, SCK, CS, DC, RESET, SDO/MISO to the pins above. The exact GPIOs depend on your wiring. These are common defaults.
 
 ## Troubleshooting
 
-- **Upload: `Invalid head of packet`** — bootloader mode (hold BOOT, tap RST, release BOOT); close any serial monitor first.
-- **`claude-display.local` won't resolve** — mDNS is flaky on some networks; use the board's IP in `BOARD` (and set a DHCP reservation on your router so the IP is stable when it runs untethered).
-- **Serial shows `WiFi: FAILED`** — it must be a 2.4 GHz network; double-check the SSID/password (special characters in the password can break the C string); WPA3-only routers may need WPA2/WPA3 mixed mode.
-- **Nothing appears on the board** — check the board is reachable (`curl http://<board>/`), that you started a **new** session after adding the hooks, and that `jq` is installed.
+- Upload fails with `Invalid head of packet`: put the board in bootloader mode (hold BOOT, tap RST, release BOOT), and close any serial monitor first.
+- `claude-display.local` does not resolve: mDNS does not work on some networks. Use the board IP in `BOARD`. Set a DHCP reservation on your router so the IP stays the same when it runs on its own.
+- Serial shows `WiFi: FAILED`: the network must be 2.4 GHz. Check the name and password. A special character in the password can break the C string. WPA3-only routers may need WPA2/WPA3 mixed mode.
+- Nothing shows on the board: check the board answers (`curl http://<board>/`), that you started a new session after adding the hooks, and that `jq` is installed.
 
 ## Credits
 
-- Board definition and hardware: [LilyGO T-Display-S3](https://github.com/Xinyuan-LilyGO/T-Display-S3).
+- Board and hardware: [LilyGO T-Display-S3](https://github.com/Xinyuan-LilyGO/T-Display-S3).
 - Graphics: [Arduino_GFX](https://github.com/moononournation/Arduino_GFX) by moononournation.
 - JSON parsing: [ArduinoJson](https://arduinojson.org/) by Benoît Blanchon.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
