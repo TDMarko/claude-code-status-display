@@ -1,0 +1,12 @@
+# PlatformIO build output
+.pio/
+
+# Local IDE / editor config
+.vscode/
+.idea/
+
+# WiFi credentials — NEVER commit these
+src/secrets.h
+
+# macOS
+.DS_Store
