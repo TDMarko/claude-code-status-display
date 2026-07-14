@@ -14,6 +14,19 @@ Runs on a **LilyGO T-Display-S3** (ESP32-S3 + 1.9" ST7789, 320×170). Your machi
                                                               └───────────────────────┘
 ```
 
+## Compatibility
+
+The integration is a Claude Code **hook**, so it works with any Claude Code that runs **locally on your machine** and reads `~/.claude/settings.json`:
+
+| Surface | Works? | Why |
+|---|---|---|
+| Terminal / CLI | ✅ | Runs locally, fires hooks. |
+| VS Code / JetBrains extension | ✅ | Same local engine and `~/.claude/settings.json`. |
+| Desktop app (Mac/Windows) | ✅ *(should)* | Runs locally; not hardware-tested here. |
+| Web app (claude.ai/code) | ❌ | Runs on Anthropic's servers — the hook can't execute on your machine or reach a device on your LAN. |
+
+Multiple surfaces at once is fine — every local session that fires hooks shows up, regardless of which app started it.
+
 ## Features
 
 - **One row per session**, labelled by project folder (with `#1`/`#2` suffixes when two sessions share a folder).
