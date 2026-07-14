@@ -40,6 +40,7 @@ Running several of these at once is fine. Every local session that fires hooks s
 - On any state change the screen shows a big blinking circle in that color, with the session name, for about one second.
 - Long folder names scroll left and right so you can read them. They pause for 5 seconds first.
 - The 60 second "waiting for your input" nudge from Claude is ignored, so a finished session stays green instead of turning red on its own.
+- Works with subagents and long agent runs. A session that keeps running tools stays marked working, and it goes back to working after you approve a permission prompt. Subagent activity counts toward the parent session, so you get one row per session, not one row per subagent.
 - The display is set in one file (`src/display_config.h`): driver, bus, pins, and resolution. The layout adjusts to the screen size. It ships set up for the T-Display-S3 and can be changed for other ESP32 boards with an ST7789 or ILI9341 screen.
 
 ## Hardware
