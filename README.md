@@ -25,7 +25,7 @@ The link between Claude Code and the board is a Claude Code hook. So it works wi
 |---|---|---|
 | Terminal / CLI | Yes | Runs on your machine and fires hooks. |
 | VS Code / JetBrains extension | Yes | Same local engine and `settings.json`. |
-| Desktop app (Mac/Windows) | Should | Runs locally. Not tested on hardware here. |
+| Desktop app (Mac/Windows) | Yes | Runs locally and fires hooks. Tested and working. |
 | Web app (claude.ai/code) | No | Runs on Anthropic servers, so the hook cannot run on your machine or reach a device on your network. |
 
 Running several of these at once is fine. Every local session that fires hooks shows up, no matter which app started it.
