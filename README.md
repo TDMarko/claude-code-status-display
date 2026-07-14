@@ -1,8 +1,10 @@
 # Claude Code Status Display
 
-A small always-on hardware dashboard for [Claude Code](https://claude.com/claude-code). It shows, one row per session, what every Claude Code session across your terminal tabs is doing right now — **working**, **done**, or **needs you** — plus each session's context-window usage and model. When a session changes state it flashes a big traffic-light circle so you notice from across the room.
+A small always-on hardware dashboard for [Claude Code](https://claude.com/claude-code) that tracks **all your concurrent sessions at once** — one row per terminal tab. See at a glance what each session is doing right now — **working**, **done**, or **needs you** — plus its context-window usage and model. When a session changes state it flashes a big traffic-light circle so you notice from across the room.
 
 Runs on a **LilyGO T-Display-S3** (ESP32-S3 + 1.9" ST7789, 320×170). Your machine pushes updates to it over WiFi via Claude Code hooks — no cloud, no broker, no daemon.
+
+![The dashboard running on a LilyGO T-Display-S3: four Claude Code sessions with per-row model tag, status, and context-usage bars](docs/example.png)
 
 ```
  Terminal tab 1 (Claude Code) ┐
@@ -29,6 +31,7 @@ Multiple surfaces at once is fine — every local session that fires hooks shows
 
 ## Features
 
+- **Multi-session by design** — tracks every concurrent Claude Code session/tab at once (up to 24), one row each, priority-sorted so anything needing you jumps to the top; overflow collapses into a per-state summary (`+13 more: 5 work, 6 done, 2 idle`).
 - **One row per session**, labelled by project folder (with `#1`/`#2` suffixes when two sessions share a folder).
 - **Live status**: ready (gray) · working (amber) · done (green) · needs you (red, blinking, pinned to top).
 - **Context bar + %** per session (green → amber → red as the window fills).
@@ -228,6 +231,17 @@ Wiring: panel `VCC`→3V3, `GND`→GND, `LED`→`PIN_BL` (or 3V3), and `SDI/MOSI
 - **`claude-display.local` won't resolve** — mDNS is flaky on some networks; use the board's IP in `BOARD` (and set a DHCP reservation on your router so the IP is stable when it runs untethered).
 - **Serial shows `WiFi: FAILED`** — it must be a 2.4 GHz network; double-check the SSID/password (special characters in the password can break the C string); WPA3-only routers may need WPA2/WPA3 mixed mode.
 - **Nothing appears on the board** — check the board is reachable (`curl http://<board>/`), that you started a **new** session after adding the hooks, and that `jq` is installed.
+
+## Related projects
+
+Prior art in the "physical status display for Claude Code" space — worth a look, and thanks for the inspiration:
+
+- [alonw0/claude-monitor-esp32](https://github.com/alonw0/claude-monitor-esp32) — MicroPython OLED notifier with sound and a "waiting" LED.
+- [houxiaomu/m5stack-coding-toys](https://github.com/houxiaomu/m5stack-coding-toys) — mirrors a single live session (model, context, cost, git) onto an M5Stack CoreS3.
+- [rootedlab-code/claude-code-usage-monitor](https://github.com/rootedlab-code/claude-code-usage-monitor) — Waveshare ESP32-S3 usage monitor (cost, tokens, rate-limit window) via a Python bridge.
+- [puritysb/AgentDeck](https://github.com/puritysb/AgentDeck) — multi-surface controller/dashboard for AI coding agents.
+
+**What's different here:** a **multi-session** dashboard (one row per concurrent tab, priority-sorted) driven purely by Claude Code **hooks → HTTP over WiFi** — no bridge daemon and no Bluetooth.
 
 ## Credits
 
