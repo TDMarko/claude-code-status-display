@@ -40,7 +40,7 @@ Running several of these at once is fine. Every local session that fires hooks s
 - On any state change the screen shows a big blinking circle in that color, with the session name, for about one second.
 - Long folder names scroll left and right so you can read them. They pause for 5 seconds first.
 - The 60 second "waiting for your input" nudge from Claude is ignored, so a finished session stays green instead of turning red on its own.
-- Works with subagents and long agent runs. A session that keeps running tools stays marked working, and it goes back to working after you approve a permission prompt. Subagent activity counts toward the parent session, so you get one row per session, not one row per subagent.
+- Works with subagents and long agent runs. A session that keeps running tools stays marked working, and it goes back to working the moment the next tool starts, including after you approve a permission prompt or when a background agent keeps going after the main reply ends. Subagent activity counts toward the parent session, so you get one row per session, not one row per subagent.
 - The display is set in one file (`src/display_config.h`): driver, bus, pins, and resolution. The layout adjusts to the screen size. It ships set up for the T-Display-S3 and can be changed for other ESP32 boards with an ST7789 or ILI9341 screen.
 
 ## Hardware
@@ -116,13 +116,14 @@ BOARD="http://192.168.x.y"
 
 ### 3. Wire up Claude Code hooks
 
-Add these five events to `~/.claude/settings.json`. If you already have a `hooks` block, add to it instead of replacing it. Use the full path, because Claude Code does not expand `~`.
+Add these seven events to `~/.claude/settings.json`. If you already have a `hooks` block, add to it instead of replacing it. Use the full path, because Claude Code does not expand `~`.
 
 ```json
 {
   "hooks": {
     "SessionStart":     [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
     "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
+    "PreToolUse":       [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
     "PostToolUse":      [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
     "Notification":     [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
     "Stop":             [{ "hooks": [{ "type": "command", "command": "/Users/YOU/.claude/hooks/claude-display.sh", "async": true }] }],
@@ -148,13 +149,16 @@ curl -s http://claude-display.local/event -H 'Content-Type: application/json' \
 |---|---|---|
 | `SessionStart` | ready | gray |
 | `UserPromptSubmit` | working | amber |
+| `PreToolUse` (a tool is starting) | working | amber |
 | `PostToolUse` (a tool ran) | working | amber |
 | `Stop` | done | green |
 | `Notification` (permission or attention) | needs you | red, blinking, top |
 | `Notification` (60s idle nudge) | ignored | none |
 | `SessionEnd` | row removed | none |
 
-`PostToolUse` is what keeps a busy session marked "working". It also clears a "needs you" once you approve a permission prompt and Claude runs the next tool. Long-running or agent sessions can go a long time without a `Stop`, so without this they would get stuck on their last state. Tool activity from subagents carries the parent session id, so it updates the right row.
+`PreToolUse` and `PostToolUse` are what keep a busy session marked "working". They also clear a "needs you" once you approve a permission prompt and Claude runs the next tool. Long-running or agent sessions can go a long time without a `Stop`, so without this they would get stuck on their last state. `PreToolUse` matters for the tail end of a turn: `Stop` fires the moment Claude finishes its reply, even while background agents from that session are still running, so the row goes green. The next tool those agents start flips it back to amber right away instead of waiting for the tool to finish, which could be minutes into a long build. Tool activity from subagents carries the parent session id, so it updates the right row.
+
+One mismatch is by design: `Stop` fires before any other stop hooks you have registered, so the row can turn green while your terminal still says "running stop hooks". The turn is over at that point; the board has no later event to wait for.
 
 ## Configuration
 
